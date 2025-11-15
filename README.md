@@ -1,41 +1,35 @@
-# 🔍 Multimodal RAG System - SIH 2025
+# 🔍 Multimodal RAG System
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GPU Accelerated](https://img.shields.io/badge/GPU-Accelerated-green.svg)](https://developer.nvidia.com/cuda-zone)
 
-**A production-ready Multimodal Retrieval-Augmented Generation (RAG) system for NTRO's Smart India Hackathon 2025**
+A production-ready Multimodal Retrieval-Augmented Generation (RAG) system that can ingest, index, and query diverse data formats (Documents, Images, Audio) using offline Large Language Models.
 
-> 🏆 **Built for:** National Technical Research Organisation (NTRO)  
-> 🎯 **Category:** Software | Smart Automation  
-> 💡 **Theme:** Offline Multimodal Intelligence with LLM Grounding
+## ✨ Features
 
-## 📋 Problem Statement
+### Core Capabilities
+- **Multimodal Ingestion**: PDF, DOCX, TXT, Images (PNG/JPG), Audio (MP3/WAV/M4A/FLAC)
+- **OCR Integration**: EasyOCR with GPU acceleration for text extraction from images
+- **Speech-to-Text**: Faster-Whisper for high-speed audio transcription
+- **Vector Database**: ChromaDB for semantic search across all modalities
+- **Offline LLM**: Mistral 7B via Ollama (no internet required)
+- **GPU Optimized**: Full CUDA acceleration for faster responses
+- **Modern UI**: Clean, responsive web interface with voice recording
 
-Design and build a multimodal RAG system that can **ingest, index, and query diverse data formats** (DOC, PDF, Images, Audio) within a **unified semantic retrieval framework** using a **Large Language Model in OFFLINE mode**.
-
-## ✨ Key Features
-
-### 🎯 Core Capabilities
-- ✅ **Multimodal Ingestion**: PDF, DOCX, TXT, Images (PNG/JPG), Audio (MP3/WAV/M4A/FLAC)
-- ✅ **OCR Integration**: EasyOCR with GPU acceleration for text extraction from images
-- ✅ **Speech-to-Text**: Faster-Whisper for high-speed audio transcription
-- ✅ **Vector Database**: ChromaDB for semantic search across all modalities
-- ✅ **Offline LLM**: Phi-3 via Ollama (no internet required)
-- ✅ **GPU Optimized**: Full CUDA acceleration (20-30% faster responses)
-- ✅ **ChatGPT-Style UI**: Clean, professional web interface
-
-### 🔎 Search Modes
-1. **Text Query** - Natural language questions
-2. **Image Query** - Upload images/screenshots, extract text via OCR, find related content
-3. **Audio Query** - Upload voice recordings, transcribe, search semantically
-
-### 📊 Advanced Features
-- **Quality Scoring**: Relevance percentages for each source (0-100%)
-- **Citation Tracking**: Numbered references with source file links
-- **Cross-Format Search**: Text embeddings + CLIP visual embeddings
-- **Source Navigation**: View original files, timestamps, and metadata
+### Advanced Features
+- **Citation Transparency**: Numbered inline citations [1][2][3] for every factual claim
+- **Confidence Scoring**: Answer reliability metrics (0-100%) with quality indicators
+- **Quality Scoring**: Relevance percentages for each source
+- **Voice Recording**: Direct browser recording with real-time transcription
+- **Cross-Format Search**: Text embeddings (BGE-small-en) + CLIP visual embeddings
+- **Source Metadata**: File size, creation date, OCR confidence, audio duration
 - **Statistics Dashboard**: Real-time metrics on indexed content
+
+### Search Modes
+1. **Text Query** - Natural language questions with semantic search
+2. **Image Query** - Upload images/screenshots, extract text via OCR, find related content
+3. **Audio Query** - Upload voice recordings or record directly in browser
 
 ## 🚀 Quick Start
 
@@ -49,7 +43,7 @@ Design and build a multimodal RAG system that can **ingest, index, and query div
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/YOUR_USERNAME/multimodal_rag_free.git
+git clone https://github.com/anjo3902/multimodal_offline_rag.git
 cd multimodal_rag_free
 ```
 
@@ -62,27 +56,28 @@ python -m venv .venv
 
 3. **Install dependencies:**
 ```bash
-pip install -r requirements.txt
+pip install -r config/requirements.txt
 ```
 
-4. **Install Ollama and Phi-3 model:**
+4. **Install Ollama and download Mistral 7B:**
 ```bash
 # Download Ollama from https://ollama.ai
-ollama pull phi3
+ollama pull mistral
 ```
 
-5. **Start the server:**
+5. **Set up environment variables:**
+Create `.env` file in root directory:
+```env
+LLAMA_MODEL_PATH=mistral
+CUDNN_PATH=C:\Program Files\NVIDIA\CUDNN\v9.5\bin\12.6
+```
+
+6. **Start the server:**
 ```bash
-# Option 1: Double-click START_HERE.bat (Windows)
-
-# Option 2: Command line
 python run_server.py
-
-# Option 3: GPU-optimized startup
-START_SERVER_GPU_OPTIMIZED.bat
 ```
 
-6. **Open browser:**
+7. **Open browser:**
 Navigate to `http://127.0.0.1:8000`
 
 ## 📖 Usage Guide
@@ -91,174 +86,384 @@ Navigate to `http://127.0.0.1:8000`
 - Click "Choose Files" and select your documents, images, or audio files
 - Multiple file types supported in one upload
 - System automatically processes and indexes content
+- Supported formats:
+  - **Documents**: PDF, DOCX, TXT
+  - **Images**: PNG, JPG, JPEG (OCR enabled)
+  - **Audio**: MP3, WAV, M4A, FLAC (transcribed automatically)
 
 ### 2️⃣ Query Your Data
 
 **Text Mode:**
 ```
-Example: "How to make one pan chicken?"
+Example: "What are the impacts on job seekers?"
 ```
+Type your question and press Enter or click "Search"
 
 **Image Mode:**
-- Upload an image or screenshot
-- System extracts text via OCR
-- Searches for related documents and images
+1. Upload an image or screenshot
+2. System extracts text via OCR
+3. Finds semantically related content across all indexed files
 
 **Audio Mode:**
-- Upload voice recording or audio file
-- System transcribes speech
-- Searches for matching content
 
-### 3️⃣ View Results
-- **Answer**: Structured response with Summary, Key Points, Steps, Insights, Takeaway
-- **Sources**: Numbered citations with relevance scores
-- **View Source**: Click to open original files
+*Option A: Record Voice (Fastest - 2-5 seconds)*
+1. Click "🎤 Start Voice Recording"
+2. Allow microphone permission
+3. Speak your question
+4. Click "⏹️ Stop Recording"
+5. Click "🔍 Search by Audio"
 
-## 🏗️ Project Structure
+*Option B: Upload Audio File (10-20 seconds)*
+1. Select MP3/WAV/M4A/FLAC file
+2. Click "Search by Audio"
+3. System transcribes and searches
 
+### 3️⃣ Interpret Results
+
+**Answer Format:**
 ```
-multimodal_rag_free/
-├── app.py                 # FastAPI server with endpoints
-├── run_server.py          # Server launcher
-├── generator.py           # Multi-backend LLM generator
-├── llama_query.py         # Answer generation orchestrator
-├── embeddings.py          # Text embedding engine (sentence-transformers)
-├── clip_embeddings.py     # Image embedding engine (CLIP)
-├── ocr_engine.py          # OCR processing (EasyOCR)
-├── ingestion.py           # Document processing pipeline
-├── indexer.py             # ChromaDB vector store manager
-├── utils.py               # Prompt engineering templates
-├── format_answer.py       # Answer post-processing
-├── web/                   # Frontend interface
-│   └── index.html         # Modern single-page UI
-├── chroma_db/             # Vector database (gitignored)
-├── uploads/               # Uploaded files (gitignored)
-├── requirements.txt       # Python dependencies
-├── .env                   # Configuration file
-└── START_HERE.bat         # Quick launcher
+## Summary
+Job seekers face increasing challenges due to AI adoption [1]. 
+However, new opportunities emerge in tech fields [2].
+
+## Key Points
+- **AI tools** automate routine tasks [1]
+- **Upskilling** becomes essential [2]
+- **Remote work** expands opportunities [3]
+
+## Citations
+[1] Source document name
+[2] Another source
+[3] Third source
 ```
+
+**Confidence Levels:**
+- ✅ **High (≥80%)**: Green banner - Highly reliable answer
+- ⚠️ **Medium (60-79%)**: Yellow banner - Moderately reliable
+- ❌ **Low (<60%)**: Red banner - Limited confidence
+
+**Quality Indicators:**
+- 🟢 **Excellent (≥80%)**: Highly relevant source
+- 🟡 **Good (60-79%)**: Relevant source
+- 🟠 **Fair (40-59%)**: Somewhat relevant
+- 🔴 **Low (<40%)**: Marginally relevant
+
+## 🏗️ Architecture
+
+### Directory Structure
+```
+multimodal_rag/
+├── backend/
+│   ├── api/
+│   │   └── app.py              # FastAPI server & routes
+│   ├── core/
+│   │   ├── embeddings.py       # BGE text embeddings
+│   │   ├── clip_embeddings.py  # CLIP image embeddings
+│   │   ├── indexer.py          # ChromaDB indexing
+│   │   ├── ingestion.py        # File processing
+│   │   └── ocr_engine.py       # EasyOCR integration
+│   ├── models/
+│   │   ├── llama_query.py      # LLM wrapper
+│   │   └── generator.py        # Mistral generation
+│   └── utils/
+│       ├── utils.py            # Prompt building
+│       └── format_answer.py    # Citation formatting
+├── frontend/
+│   └── index.html              # Web UI
+├── config/
+│   ├── requirements.txt        # Python dependencies
+│   └── .env                    # Environment variables
+├── scripts/
+│   ├── run_all.ps1            # Full system startup
+│   ├── run_tests.ps1          # Testing automation
+│   └── stop_server.ps1        # Shutdown script
+├── data/                      # Runtime (gitignored)
+│   ├── chroma_db/            # Vector database
+│   ├── uploads/              # Uploaded files
+│   └── logs/                 # Server logs
+├── run_server.py             # Entry point
+└── README.md                 # This file
+```
+
+### Technology Stack
+
+**Backend:**
+- **FastAPI**: High-performance API server
+- **ChromaDB**: Vector database for semantic search
+- **BGE-small-en**: Text embeddings (133MB)
+- **CLIP ViT-B/32**: Image embeddings
+- **Faster-Whisper**: Audio transcription (GPU accelerated)
+- **Mistral 7B**: LLM via Ollama (4.4GB)
+- **EasyOCR**: Optical Character Recognition
+
+**Frontend:**
+- Vanilla JavaScript (no framework dependencies)
+- MediaRecorder API for voice recording
+- Web Speech Recognition API for real-time transcription
+- Responsive CSS with modern design
 
 ## ⚙️ Configuration
 
-Edit `.env` to customize:
+### Model Settings
 
-```properties
-# Database
-CHROMA_PERSIST_DIR=./chroma_db
+**Text Embeddings** (`backend/core/embeddings.py`):
+```python
+TEXT_MODEL = "BAAI/bge-small-en"  # 133MB, high quality
+```
 
+**Image Embeddings** (`backend/core/clip_embeddings.py`):
+```python
+IMAGE_MODEL = "clip-ViT-B-32"  # CLIP visual encoder
+```
+
+**LLM Generation** (`backend/models/generator.py`):
+```python
+model = "mistral"           # Mistral 7B
+temperature = 0.3           # Lower = more factual
+num_predict = 800          # Max tokens (faster)
+```
+
+### Environment Variables
+
+Create `.env` file:
+```env
 # LLM Model
-LLAMA_MODEL_PATH=phi3
-LLAMA_MODEL_ID=phi3
+LLAMA_MODEL_PATH=mistral
 
-# Device
-EMBED_DEVICE=cuda  # or 'cpu'
+# GPU Acceleration (Windows)
+CUDNN_PATH=C:\Program Files\NVIDIA\CUDNN\v9.5\bin\12.6
 
-# Audio
-WHISPER_MODEL=base
-
-# Server
+# Server Settings
+HOST=127.0.0.1
 PORT=8000
 ```
 
-## 🎯 SIH 2025 Requirements Compliance
+### GPU Optimization
 
-| Requirement | Implementation | Status |
-|------------|----------------|--------|
-| Multimodal Ingestion | PDF, DOCX, TXT, Images, Audio | ✅ |
-| OCR for Images | EasyOCR with GPU | ✅ |
-| Speech-to-Text | Faster-Whisper | ✅ |
-| Vector Indexing | ChromaDB + CLIP | ✅ |
-| Semantic Search | Unified vector space | ✅ |
-| LLM Generation | Phi-3 (Offline) | ✅ |
-| Natural Language Query | Plain text interface | ✅ |
-| Citation Transparency | Numbered references | ✅ |
-| Source Navigation | File viewing | ✅ |
-| GPU Acceleration | CUDA optimized | ✅ |
+For faster inference, ensure CUDA is properly configured:
 
-## 🔧 GPU Optimization
+**Windows:**
+1. Install CUDA Toolkit 12.x from NVIDIA
+2. Download cuDNN and extract to `C:\Program Files\NVIDIA\CUDNN\`
+3. Set `CUDNN_PATH` in `.env`
 
-For maximum performance with NVIDIA GPUs:
-
+**Linux:**
 ```bash
-# Option 1: Use optimized startup script
-START_SERVER_GPU_OPTIMIZED.bat
+export CUDNN_PATH=/usr/local/cuda/lib64
+export LD_LIBRARY_PATH=$CUDNN_PATH:$LD_LIBRARY_PATH
+```
 
-# Option 2: Set environment variables manually
-$env:OLLAMA_NUM_GPU=999
-$env:OLLAMA_MAX_LOADED_MODELS=1
-$env:OLLAMA_FLASH_ATTENTION=1
+## 🧪 Testing
+
+### Manual Testing
+
+1. **Start server:**
+```bash
 python run_server.py
 ```
 
-**Expected Improvements:**
-- 20-30% faster LLM generation
-- Lower latency between queries
-- Model stays in GPU memory (no reload delay)
+2. **Open browser:** http://127.0.0.1:8000
 
-## 📊 Performance Metrics
+3. **Test each mode:**
+   - Upload test documents
+   - Try text query
+   - Upload test image
+   - Record voice or upload audio
 
-- **Response Time**: 5-7 seconds per query (GPU optimized)
-- **Accuracy**: 85-95% relevance with quality scoring
-- **Throughput**: Handles 100+ documents, images, audio files
-- **Memory**: ~4GB GPU VRAM, ~8GB system RAM
+### Automated Testing
 
-## 🛠️ Troubleshooting
+```bash
+# Run all tests
+.\scripts\run_tests.ps1
+
+# Test specific component
+python -m pytest test/
+```
+
+### Performance Benchmarks
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| Voice Recording | 2-5s | Real-time transcription |
+| Audio File Upload | 10-20s | Includes transcription |
+| Text Query | 8-15s | Mistral 7B generation |
+| Image Upload | 5-10s | OCR + indexing |
+| Document Upload | 3-8s | Per document |
+
+## 🔧 Troubleshooting
 
 ### Server Won't Start
+
+**Issue:** "Port 8000 already in use"
 ```bash
-# Check if port is available
+# Windows
 netstat -ano | findstr :8000
+taskkill /F /PID <PID>
 
-# Verify Ollama is running
-ollama list
+# Linux
+lsof -i :8000
+kill -9 <PID>
 ```
 
-### Slow Performance
+**Issue:** "CUDA out of memory"
+- Reduce `num_predict` in `generator.py`
+- Close other GPU applications
+- Restart with CPU-only mode: Set `CUDA_VISIBLE_DEVICES=-1`
+
+### Voice Recording Issues
+
+**Issue:** Microphone permission denied
+- Browser Settings → Privacy → Microphone → Allow for localhost
+- Try Chrome/Edge (Firefox/Safari not fully supported)
+
+**Issue:** Empty transcription
+- Speak louder and clearer
+- Check microphone is working in other apps
+- Ensure WebM format supported (server logs will show format)
+
+### Answer Quality Issues
+
+**Issue:** Irrelevant answers
+- Upload more diverse documents
+- Use more specific questions
+- Check confidence score (low = unreliable)
+
+**Issue:** No citations [1][2][3]
+- Check `backend/utils/utils.py` prompt template
+- Verify sources were properly indexed
+- Review server logs for LLM errors
+
+### Model Issues
+
+**Issue:** "Mistral model not found"
 ```bash
-# Use GPU-optimized startup
-START_SERVER_GPU_OPTIMIZED.bat
-
-# Check CUDA availability
-python -c "import torch; print(torch.cuda.is_available())"
+ollama list          # Check installed models
+ollama pull mistral  # Download if missing
+ollama run mistral "test"  # Verify working
 ```
 
-### OCR Not Working
-- EasyOCR downloads models on first use (~500MB)
-- Ensure stable internet for initial setup
-- Check GPU drivers are installed
+**Issue:** Slow generation (>60 seconds)
+- Verify GPU acceleration enabled
+- Check CUDA/cuDNN installed
+- Reduce `num_predict` in config
+- Consider using smaller model
+
+## 📊 API Reference
+
+### Upload Files
+```http
+POST /upload/
+Content-Type: multipart/form-data
+
+files: [file1, file2, ...]
+```
+
+**Response:**
+```json
+{
+  "message": "Uploaded 3 files",
+  "files": ["doc1.pdf", "image.png", "audio.mp3"]
+}
+```
+
+### Text Query
+```http
+POST /query/
+Content-Type: application/json
+
+{
+  "query": "What are the key points?",
+  "top_k": 5
+}
+```
+
+**Response:**
+```json
+{
+  "answer": "## Summary\n...",
+  "sources": [
+    {
+      "file_name": "document.pdf",
+      "chunk": "relevant text...",
+      "quality_score": 92.5
+    }
+  ],
+  "confidence_score": 87.3
+}
+```
+
+### Image Query
+```http
+POST /query/
+Content-Type: multipart/form-data
+
+query_image: <file>
+```
+
+### Audio Query
+```http
+POST /query/
+Content-Type: multipart/form-data
+
+query_audio: <file>
+```
+
+### Statistics
+```http
+GET /stats/
+```
+
+**Response:**
+```json
+{
+  "total_chunks": 156,
+  "unique_files": 12,
+  "file_types": {
+    "pdf": 5,
+    "png": 4,
+    "mp3": 3
+  }
+}
+```
 
 ## 🤝 Contributing
 
-This project is part of SIH 2025. For contributions:
+Contributions welcome! Please:
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👥 Team
-
-**Organization:** National Technical Research Organisation (NTRO)  
-**Theme:** Smart Automation  
-**Year:** 2025
-
 ## 🙏 Acknowledgments
 
-- **Ollama** - Offline LLM deployment
-- **ChromaDB** - Vector database
-- **OpenAI CLIP** - Visual embeddings
-- **EasyOCR** - Text extraction
-- **Faster-Whisper** - Audio transcription
+- **Ollama** for local LLM inference
+- **ChromaDB** for vector database
+- **Mistral AI** for the Mistral 7B model
+- **OpenAI CLIP** for multimodal embeddings
+- **Faster-Whisper** for audio transcription
+- **EasyOCR** for optical character recognition
 
-## 📧 Contact
+## 📞 Support
 
-For questions or support, please open an issue in the GitHub repository.
+For issues and questions:
+- GitHub Issues: [multimodal_offline_rag/issues](https://github.com/anjo3902/multimodal_offline_rag/issues)
+
+## 🎯 Roadmap
+
+- [ ] Add support for video files
+- [ ] Implement real-time streaming responses
+- [ ] Add multi-language support
+- [ ] Create Docker deployment
+- [ ] Add authentication system
+- [ ] Implement conversation history
+- [ ] Add export to PDF/Word features
 
 ---
 
-**Built with ❤️ for Smart India Hackathon 2025**
+**Built with ❤️ for offline multimodal intelligence**

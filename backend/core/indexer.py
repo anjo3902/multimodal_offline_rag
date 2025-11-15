@@ -5,7 +5,7 @@ import chromadb
 from chromadb.utils import embedding_functions
 import numpy as np
 
-DEFAULT_DIR = os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
+DEFAULT_DIR = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma_db")
 
 class ChromaIndexer:
     def __init__(self, persist_directory: str = DEFAULT_DIR):

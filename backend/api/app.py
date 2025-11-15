@@ -1,22 +1,23 @@
 # app.py
 import os
+import re
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from typing import List
-from embeddings import Embedder
-from indexer import ChromaIndexer
-from llama_query import generate_answer
-from utils import build_prompt
-from format_answer import format_with_sources
+from backend.core.embeddings import Embedder
+from backend.core.indexer import ChromaIndexer
+from backend.models.llama_query import generate_answer
+from backend.utils.utils import build_prompt
+from backend.utils.format_answer import format_with_sources
 from dotenv import load_dotenv
 import numpy as np
 import shutil
 from pathlib import Path
-from ingestion import load_image, transcribe_audio_whisper, extract_text_from_pdf, extract_text_from_docx, chunk_text, chunk_audio_by_seconds
+from backend.core.ingestion import load_image, transcribe_audio_whisper, extract_text_from_pdf, extract_text_from_docx, chunk_text, chunk_audio_by_seconds
 import uuid
-from clip_embeddings import get_clip_embedder
-from ocr_engine import get_ocr_engine
+from backend.core.clip_embeddings import get_clip_embedder
+from backend.core.ocr_engine import get_ocr_engine
 
 load_dotenv()
 
@@ -32,9 +33,9 @@ try:
     cudnn_bin = str(cudnn_path / "bin")
     if os.path.exists(cudnn_bin):
         os.environ["PATH"] = cudnn_bin + ";" + os.environ.get("PATH", "")
-        print(f"✅ Added cuDNN to PATH: {cudnn_bin}")
+        print(f"[OK] Added cuDNN to PATH: {cudnn_bin}")
 except Exception as e:
-    print(f"⚠️  Could not add cuDNN to PATH: {e}")
+    print(f"[WARNING] Could not add cuDNN to PATH: {e}")
 
 EMBED_DEVICE = os.getenv("EMBED_DEVICE", "cpu")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
@@ -42,7 +43,7 @@ LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", "/path/to/llama.bin")
 TOP_K_DEFAULT = 5
 
 app = FastAPI(title="Multimodal RAG (Offline)")
-app.mount("/static", StaticFiles(directory="web"), name="static")
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 # Initialize embedders and OCR
 embedder = Embedder(device=EMBED_DEVICE)  # For text/audio (sentence-transformers)
@@ -53,7 +54,8 @@ indexer = ChromaIndexer()
 @app.get("/", response_class=HTMLResponse)
 def home():
     try:
-        html_path = Path(__file__).parent / "web" / "index.html"
+        # Navigate from backend/api/ to frontend/
+        html_path = Path(__file__).parent.parent.parent / "frontend" / "index.html"
         return html_path.read_text(encoding="utf-8")
     except Exception as e:
         print(f"Error loading index.html: {e}")
@@ -64,12 +66,12 @@ async def upload_files(files: List[UploadFile] = File(...)):
     """Upload and index files (PDF, DOCX, images, audio)"""
     saved = []
     file_details = []  # Store details about each file including OCR text
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs("data/uploads", exist_ok=True)
     
     for f in files:
         try:
             print(f"\n=== Uploading file: {f.filename} ===")
-            dest = os.path.join("uploads", f"{uuid.uuid4().hex}_{f.filename}")
+            dest = os.path.join("data/uploads", f"{uuid.uuid4().hex}_{f.filename}")
             
             # Save file first
             with open(dest, "wb") as out:
@@ -95,7 +97,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
                     text = Path(dest).read_text(encoding="utf-8")
                     doc_type = "TXT"
                 
-                print(f"  ✅ Extracted {len(text)} characters from {doc_type}")
+                print(f"  [OK] Extracted {len(text)} characters from {doc_type}")
                 
                 chunks = chunk_text(text, chunk_size=800, overlap=100)
                 ids, embeddings, metadatas, documents = [], [], [], []
@@ -107,7 +109,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
                     metadatas.append({"source": Path(dest).name, "path": dest, "chunk": i, "start": s, "end": e, "type":"document"})
                     documents.append(chunk)
                 indexer.add_items(ids, np.vstack(embeddings), metadatas, documents)
-                print(f"  ✅ Document indexed: {len(ids)} chunks")
+                print(f"  [OK] Document indexed: {len(ids)} chunks")
                 
                 # Store document info for response
                 file_info = {
@@ -128,12 +130,12 @@ async def upload_files(files: List[UploadFile] = File(...)):
                 # Lazy load CLIP embedder
                 global clip_embedder, ocr_engine
                 if clip_embedder is None:
-                    print("  🎨 Loading CLIP model for visual embeddings...")
+                    print("  [CLIP] Loading CLIP model for visual embeddings...")
                     clip_embedder = get_clip_embedder(device=EMBED_DEVICE)
                 
                 # Lazy load OCR engine
                 if ocr_engine is None:
-                    print("  📝 Initializing OCR engine...")
+                    print("  [NOTE] Initializing OCR engine...")
                     ocr_engine = get_ocr_engine()
                 
                 # Load image
@@ -147,7 +149,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
                 ids, embeddings, metadatas, documents = [], [], [], []
                 
                 # Strategy 1: CLIP visual embedding (ALWAYS - works for all images)
-                print("  🎨 Creating CLIP visual embedding...")
+                print("  [CLIP] Creating CLIP visual embedding...")
                 visual_emb = clip_embedder.embed_image(pil)
                 visual_doc_id = f"{Path(dest).name}::clip_visual::{uuid.uuid4().hex[:8]}"
                 visual_description = f"Image: {cleaned_name}. Visual content including charts, diagrams, photos, screenshots, or graphics."
@@ -163,17 +165,17 @@ async def upload_files(files: List[UploadFile] = File(...)):
                     "description": visual_description
                 })
                 documents.append(visual_description)
-                print(f"  ✅ CLIP visual embedding created (512-dim)")
+                print(f"  [OK] CLIP visual embedding created (512-dim)")
                 
                 # Strategy 2: Advanced OCR text extraction
-                print("  📝 Extracting text with OCR...")
+                print("  [NOTE] Extracting text with OCR...")
                 ocr_text = ""
                 ocr_backend = None
                 if ocr_engine.is_available():
                     ocr_text = ocr_engine.extract_text(pil)
                     ocr_backend = ocr_engine.get_backend()
                 else:
-                    print("  ⚠️  No OCR backend available - install easyocr for best results")
+                    print("  [WARNING]  No OCR backend available - install easyocr for best results")
                 
                 # Store OCR results for response
                 file_info = {
@@ -187,8 +189,8 @@ async def upload_files(files: List[UploadFile] = File(...)):
                 }
                 
                 if ocr_text and ocr_text.strip():
-                    print(f"  ✅ OCR extracted {len(ocr_text)} characters using {ocr_backend}")
-                    print(f"  📄 Extracted text preview: {ocr_text[:200]}...")
+                    print(f"  [OK] OCR extracted {len(ocr_text)} characters using {ocr_backend}")
+                    print(f"  [DOC] Extracted text preview: {ocr_text[:200]}...")
                     # Chunk OCR text and create CLIP text embeddings
                     chunks = chunk_text(ocr_text.strip(), chunk_size=800, overlap=100)
                     file_info["text_chunks"] = len(chunks)
@@ -211,15 +213,15 @@ async def upload_files(files: List[UploadFile] = File(...)):
                             "description": f"OCR text from image: {cleaned_name}"
                         })
                         documents.append(chunk)
-                    print(f"  ✅ Indexed {len(chunks)} OCR text chunks with CLIP embeddings")
+                    print(f"  [OK] Indexed {len(chunks)} OCR text chunks with CLIP embeddings")
                 else:
-                    print(f"  ℹ️  No text detected in image (pure visual content)")
+                    print(f"  [INFO]  No text detected in image (pure visual content)")
                     file_info["text_chunks"] = 0
                 
                 # Add all embeddings to CLIP collection (512-dim)
                 if embeddings:
                     indexer.add_items(ids, np.vstack(embeddings), metadatas, documents, use_clip=True)
-                    print(f"  ✅ Image indexed with {len(ids)} embeddings (visual + text) in CLIP collection")
+                    print(f"  [OK] Image indexed with {len(ids)} embeddings (visual + text) in CLIP collection")
                 
                 file_details.append(file_info)                
             elif ext in [".wav", ".mp3", ".m4a", ".flac"]:
@@ -257,7 +259,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
                 if ids:
                     print(f"Adding {len(ids)} audio chunks to index...")
                     indexer.add_items(ids, np.vstack(embeddings), metadatas, documents)
-                    print(f"  ✅ Audio indexing complete!")
+                    print(f"  [OK] Audio indexing complete!")
                     
                     # Store audio transcription info for response
                     full_transcription = " ".join(all_transcriptions)
@@ -272,7 +274,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
                         "duration_seconds": round(chunks[-1][2], 1) if chunks else 0
                     }
                     file_details.append(file_info)
-                    print(f"  📝 Audio file_info created: {file_info['filename']}, {file_info['char_count']} chars, {file_info['duration_seconds']}s")
+                    print(f"  [NOTE] Audio file_info created: {file_info['filename']}, {file_info['char_count']} chars, {file_info['duration_seconds']}s")
                 else:
                     print("Warning: No audio chunks were transcribed successfully")
                     
@@ -284,7 +286,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
             
         except Exception as e:
             error_msg = f"Error processing {f.filename}: {str(e)}"
-            print(f"\n❌ {error_msg}")
+            print(f"\n[ERROR] {error_msg}")
             import traceback
             traceback.print_exc()
             # Return error response with details
@@ -296,7 +298,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
             }, status_code=500)
     
     # All files processed successfully
-    print(f"\n✅ Upload complete! Returning details for {len(file_details)} files")
+    print(f"\n[OK] Upload complete! Returning details for {len(file_details)} files")
     for detail in file_details:
         print(f"   - {detail.get('type', 'unknown')}: {detail.get('filename', 'unknown')}")
     
@@ -318,23 +320,23 @@ async def query_endpoint(
     
     try:
         print(f"\n{'='*60}")
-        print(f"🔍 Query received - Mode: {search_mode}")
+        print(f"[SEARCH] Query received - Mode: {search_mode}")
         
         # Count chunks in both collections
         text_count = indexer.collection.count()
         clip_count = indexer.clip_collection.count()
         total_count = text_count + clip_count
-        print(f"📊 Database has {total_count} total chunks ({text_count} text, {clip_count} CLIP)")
+        print(f"[STATS] Database has {total_count} total chunks ({text_count} text, {clip_count} CLIP)")
         
         # ALWAYS search BOTH collections to get all content including image OCR text
         search_k = max(top_k * 4, 15)  # Get more results to ensure good coverage
         
         # Determine query type and generate appropriate embeddings
         if search_mode == "image" and query_image:
-            print("🖼️  IMAGE SEARCH MODE: Using uploaded image as query")
+            print("[IMAGE]  IMAGE SEARCH MODE: Using uploaded image as query")
             # Save image temporarily
-            temp_path = os.path.join("uploads", f"temp_query_{uuid.uuid4().hex}_{query_image.filename}")
-            os.makedirs("uploads", exist_ok=True)
+            temp_path = os.path.join("data/uploads", f"temp_query_{uuid.uuid4().hex}_{query_image.filename}")
+            os.makedirs("data/uploads", exist_ok=True)
             with open(temp_path, "wb") as out:
                 content = await query_image.read()
                 out.write(content)
@@ -348,12 +350,11 @@ async def query_endpoint(
             from PIL import Image
             pil_img = Image.open(temp_path).convert("RGB")
             ocr_text = ocr_engine.extract_text(pil_img) if ocr_engine.is_available() else ""
-            print(f"  📝 OCR extracted: {len(ocr_text)} characters" if ocr_text else "  📝 No OCR text detected")
+            print(f"  [NOTE] OCR extracted: {len(ocr_text)} characters" if ocr_text else "  [NOTE] No OCR text detected")
             
             # FOLLOW TEXT QUERY WORKFLOW: Use OCR text as the query (like text mode uses user input)
             if ocr_text and len(ocr_text.strip()) > 10:
                 # Fix specific known OCR spacing errors
-                import re
                 query = ocr_text.strip()
                 
                 # Fix common OCR spacing errors using simple replacement
@@ -375,15 +376,15 @@ async def query_endpoint(
                 # Normalize multiple consecutive spaces to single space
                 query = re.sub(r'\s{2,}', ' ', query)
                 query = query.strip()
-                print(f"  📝 Using OCR text as query: '{query[:100]}...'")
+                print(f"  [NOTE] Using OCR text as query: '{query[:100]}...'")
             else:
                 # No meaningful OCR - inform user
                 query = ""
-                print(f"  ⚠️  No text detected in image. Please provide a text query or upload an image with text.")
+                print(f"  [WARNING]  No text detected in image. Please provide a text query or upload an image with text.")
             
             # EXACT SAME WORKFLOW AS TEXT MODE
             if query:
-                print(f"  🔍 Searching BOTH collections (text + CLIP) for comprehensive results...")
+                print(f"  [SEARCH] Searching BOTH collections (text + CLIP) for comprehensive results...")
                 
                 # Search text collection (same as text mode)
                 q_emb_text = embedder.embed_text(query)
@@ -391,7 +392,7 @@ async def query_endpoint(
                 
                 # Search CLIP collection (same as text mode)
                 if clip_embedder is None:
-                    print("  📥 Loading CLIP model for image search...")
+                    print("  [LOAD] Loading CLIP model for image search...")
                     clip_embedder = get_clip_embedder(device=EMBED_DEVICE)
                 
                 q_emb_clip = clip_embedder.embed_text(query)
@@ -408,23 +409,49 @@ async def query_endpoint(
                 pass
                 
         elif search_mode == "audio" and query_audio:
-            print("🎵 AUDIO SEARCH MODE: Using uploaded audio as query")
+            print("[AUDIO] AUDIO SEARCH MODE: Using uploaded audio as query")
             # Save audio temporarily
-            temp_path = os.path.join("uploads", f"temp_query_{uuid.uuid4().hex}_{query_audio.filename}")
-            os.makedirs("uploads", exist_ok=True)
+            temp_path = os.path.join("data/uploads", f"temp_query_{uuid.uuid4().hex}_{query_audio.filename}")
+            os.makedirs("data/uploads", exist_ok=True)
             with open(temp_path, "wb") as out:
                 content = await query_audio.read()
                 out.write(content)
             
+            # Convert WebM/MP4 to WAV if needed (for voice recording compatibility)
+            converted_path = None
+            file_ext = Path(temp_path).suffix.lower()
+            if file_ext in ['.webm', '.mp4', '.m4a', '.ogg']:
+                print(f"  [CONVERT] Converting {file_ext} to WAV for better compatibility...")
+                try:
+                    import subprocess
+                    converted_path = temp_path.replace(file_ext, '.wav')
+                    # Use FFmpeg to convert to WAV
+                    subprocess.run([
+                        'ffmpeg', '-i', temp_path, 
+                        '-ar', '16000',  # 16kHz sample rate (Whisper standard)
+                        '-ac', '1',       # Mono
+                        '-y',             # Overwrite
+                        converted_path
+                    ], check=True, capture_output=True)
+                    print(f"  [OK] Converted to WAV successfully")
+                    # Use converted file for transcription
+                    transcription_path = converted_path
+                except Exception as conv_error:
+                    print(f"  [WARNING]  Conversion failed: {conv_error}, trying original file...")
+                    transcription_path = temp_path
+            else:
+                transcription_path = temp_path
+            
             # Transcribe audio
             from ingestion import transcribe_audio_whisper
-            res = transcribe_audio_whisper(temp_path, model_name=WHISPER_MODEL, device=EMBED_DEVICE)
+            res = transcribe_audio_whisper(transcription_path, model_name=WHISPER_MODEL, device=EMBED_DEVICE)
             query = res.get("text", "").strip()
-            print(f"  📝 Transcribed audio query: {query[:100]}...")
+            transcription_text = query  # Store for response
+            print(f"  [NOTE] Transcribed audio query: {query[:100]}...")
             
             # EXACT SAME WORKFLOW AS TEXT MODE
             if query:
-                print(f"  🔍 Searching BOTH collections (text + CLIP) for comprehensive results...")
+                print(f"  [SEARCH] Searching BOTH collections (text + CLIP) for comprehensive results...")
                 
                 # Search text collection (same as text mode)
                 q_emb_text = embedder.embed_text(query)
@@ -432,7 +459,7 @@ async def query_endpoint(
                 
                 # Search CLIP collection (same as text mode)
                 if clip_embedder is None:
-                    print("  📥 Loading CLIP model for image search...")
+                    print("  [LOAD] Loading CLIP model for image search...")
                     clip_embedder = get_clip_embedder(device=EMBED_DEVICE)
                 
                 q_emb_clip = clip_embedder.embed_text(query)
@@ -441,20 +468,23 @@ async def query_endpoint(
                 # No transcription available
                 results_text = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
                 results_clip = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+                transcription_text = ""  # Empty transcription
             
-            # Clean up temp file
+            # Clean up temp files
             try:
                 os.remove(temp_path)
+                if converted_path and os.path.exists(converted_path):
+                    os.remove(converted_path)
             except:
                 pass
                 
         else:  # Default: TEXT search mode
-            print("📝 TEXT SEARCH MODE: Using text query")
+            print("[NOTE] TEXT SEARCH MODE: Using text query")
             if not query or not query.strip():
                 return JSONResponse({"error": "Query text is required for text search mode"}, status_code=400)
             
             print(f"  Query: {query}")
-            print("�🔍 Searching BOTH collections (text + CLIP) for comprehensive results...")
+            print("�[SEARCH] Searching BOTH collections (text + CLIP) for comprehensive results...")
             
             # Search text collection (documents, audio)
             q_emb_text = embedder.embed_text(query)
@@ -462,7 +492,7 @@ async def query_endpoint(
             
             # Search CLIP collection (images and their OCR text)
             if clip_embedder is None:
-                print("  📥 Loading CLIP model for image search...")
+                print("  [LOAD] Loading CLIP model for image search...")
                 clip_embedder = get_clip_embedder(device=EMBED_DEVICE)
             
             q_emb_clip = clip_embedder.embed_text(query)
@@ -487,12 +517,12 @@ async def query_endpoint(
             embedding_type = meta.get("embedding_type", "standard")
             embedding_type_counts[embedding_type] = embedding_type_counts.get(embedding_type, 0) + 1
         print(f"📋 Result distribution: {type_counts}")
-        print(f"📊 Embedding types: {embedding_type_counts}")
+        print(f"[STATS] Embedding types: {embedding_type_counts}")
         
         # CRITICAL FIX: STRICTER THRESHOLDS + DOCUMENT PRIORITY
         # Problem: Irrelevant CLIP results (dist 0.75) beat relevant text (dist 1.1)
         # Solution: Much stricter CLIP thresholds + document quality bonus
-        print("🎯 Ranking with strict quality thresholds + document priority")
+        print("[TARGET] Ranking with strict quality thresholds + document priority")
         
         # Build combined results with metadata
         all_results = []
@@ -511,7 +541,7 @@ async def query_endpoint(
             else:
                 text_results.append((doc, meta, dist, ftype, etype))
         
-        print(f"📊 Separated: {len(text_results)} text results, {len(clip_results)} CLIP results")
+        print(f"[STATS] Separated: {len(text_results)} text results, {len(clip_results)} CLIP results")
         
         # ABSOLUTE QUALITY THRESHOLDS (RESEARCH-GRADE STRICTNESS)
         # Text embeddings: More lenient (semantic text matching is reliable)
@@ -530,7 +560,7 @@ async def query_endpoint(
             # Absolute quality score for text embeddings
             if dist < TEXT_EXCELLENT_THRESHOLD:
                 quality_score = 1.0
-                quality_label = "⭐ EXCELLENT"
+                quality_label = "[STAR] EXCELLENT"
             elif dist < TEXT_GOOD_THRESHOLD:
                 # Linear interpolation between thresholds
                 ratio = (dist - TEXT_EXCELLENT_THRESHOLD) / (TEXT_GOOD_THRESHOLD - TEXT_EXCELLENT_THRESHOLD)
@@ -545,7 +575,7 @@ async def query_endpoint(
             if ftype == "document":
                 quality_score = min(1.0, quality_score * 1.15)  # 15% boost, cap at 1.0
                 if quality_score >= 0.95:
-                    quality_label = "⭐⭐ EXCELLENT (Document)"
+                    quality_label = "[STAR][STAR] EXCELLENT (Document)"
             
             scored_results.append((doc, meta, dist, quality_score, ftype, etype, quality_label))
         
@@ -554,7 +584,7 @@ async def query_endpoint(
             # Only truly relevant images should score high!
             if dist < CLIP_EXCELLENT_THRESHOLD:
                 quality_score = 1.0
-                quality_label = "⭐ EXCELLENT"
+                quality_label = "[STAR] EXCELLENT"
             elif dist < CLIP_GOOD_THRESHOLD:
                 # Linear interpolation
                 ratio = (dist - CLIP_EXCELLENT_THRESHOLD) / (CLIP_GOOD_THRESHOLD - CLIP_EXCELLENT_THRESHOLD)
@@ -572,9 +602,9 @@ async def query_endpoint(
         scored_results.sort(key=lambda x: x[3], reverse=True)
         
         # Show top results with absolute quality scores
-        print(f"📊 Top {min(10, len(scored_results))} results (absolute quality scoring):")
+        print(f"[STATS] Top {min(10, len(scored_results))} results (absolute quality scoring):")
         for i, (doc, meta, dist, quality_score, ftype, etype, quality_label) in enumerate(scored_results[:10]):
-            emoji = "📄" if ftype == "document" else "🖼️" if ftype == "image" else "🎵" if ftype == "audio" else "❓"
+            emoji = "[DOC]" if ftype == "document" else "[IMAGE]" if ftype == "image" else "[AUDIO]" if ftype == "audio" else "❓"
             source_name = meta.get('source', 'unknown')[:40]
             quality_pct = quality_score * 100
             
@@ -586,20 +616,20 @@ async def query_endpoint(
         # Only use results with strong semantic match
         QUALITY_THRESHOLD = 0.70  # Minimum 70% quality (STRICT for national org)
         
-        print(f"\n🎯 Applying STRICT quality threshold: {QUALITY_THRESHOLD*100:.0f}% (research-grade)")
+        print(f"\n[TARGET] Applying STRICT quality threshold: {QUALITY_THRESHOLD*100:.0f}% (research-grade)")
         filtered_results = [r for r in scored_results if r[3] >= QUALITY_THRESHOLD]
         
         if len(filtered_results) < len(scored_results):
             removed_count = len(scored_results) - len(filtered_results)
-            print(f"   ❌ Filtered out {removed_count} low-quality results")
+            print(f"   [ERROR] Filtered out {removed_count} low-quality results")
         
         if not filtered_results:
-            print("   ⚠️  WARNING: No results meet strict threshold! Lowering to 60%...")
+            print("   [WARNING]  WARNING: No results meet strict threshold! Lowering to 60%...")
             QUALITY_THRESHOLD = 0.60
             filtered_results = [r for r in scored_results if r[3] >= QUALITY_THRESHOLD]
             
         if not filtered_results:
-            print("   ⚠️  Still no results! Using top 3 anyway (check data quality)")
+            print("   [WARNING]  Still no results! Using top 3 anyway (check data quality)")
             filtered_results = scored_results[:3] if scored_results else []
         
         # Take top_k from filtered results
@@ -623,32 +653,32 @@ async def query_endpoint(
         distances = [item[2] for item in unique_results]
         quality_scores = [item[3] for item in unique_results]  # Keep quality scores
         
-        print(f"\n✅ Using {len(retrieved_docs)} most relevant documents for answer generation")
+        print(f"\n[OK] Using {len(retrieved_docs)} most relevant documents for answer generation")
         
         # Show final selected documents with clear quality scores
         print(f"📋 Final selections:")
         for i, (doc, meta, quality_score, dist) in enumerate(zip(retrieved_docs[:5], metadatas[:5], quality_scores[:5], distances[:5])):
             file_type = meta.get('type', 'unknown')
-            emoji = "📄" if file_type == "document" else "🖼️" if file_type == "image" else "🎵" if file_type == "audio" else "❓"
+            emoji = "[DOC]" if file_type == "document" else "[IMAGE]" if file_type == "image" else "[AUDIO]" if file_type == "audio" else "❓"
             quality_pct = quality_score * 100
             print(f"  [{i+1}] {emoji} {file_type}: {meta.get('source', 'unknown')[:40]}")
             print(f"      Quality: {quality_pct:.1f}% | Distance: {dist:.4f} | Preview: {doc[:60]}...")
         
         # Build prompt
         prompt = build_prompt(query, retrieved_docs, metadatas, top_k)
-        print(f"📝 Prompt built, length: {len(prompt)} characters")
+        print(f"[NOTE] Prompt built, length: {len(prompt)} characters")
         if not retrieved_docs:
-            print("⚠️  WARNING: No documents retrieved! Answer may be generic.")
+            print("[WARNING]  WARNING: No documents retrieved! Answer may be generic.")
         
-        # Generate answer - increased max_tokens to 2048 for complete, well-formatted answers with ALL sections
-        raw_answer = generate_answer(prompt, model_path=LLAMA_MODEL_PATH, max_tokens=2048, temperature=0.5, device=EMBED_DEVICE)
+        # Generate answer - optimized to 800 tokens for faster, focused responses
+        raw_answer = generate_answer(prompt, model_path=LLAMA_MODEL_PATH, max_tokens=800, temperature=0.3, device=EMBED_DEVICE)
         print(f"Raw answer length: {len(raw_answer)} characters")
         print(f"Raw answer preview: {raw_answer[:200]}...")
         
         # POST-PROCESS: Force proper formatting (ChatGPT-style structure)
         formatted_sources = [{"source": m.get("source", "Unknown"), "type": m.get("type", "document")} for m in metadatas]
         answer = format_with_sources(raw_answer, formatted_sources)
-        print(f"✅ Formatted answer length: {len(answer)} characters")
+        print(f"[OK] Formatted answer length: {len(answer)} characters")
         print(f"{'='*60}\n")
         
         # Enrich metadata for better citation display with quality scores
@@ -684,12 +714,42 @@ async def query_endpoint(
             
             enriched_sources.append(source_info)
         
-        return JSONResponse({
+        # Calculate answer confidence score
+        citation_count = len(re.findall(r'\[\d+\]', answer))
+        avg_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 0
+        source_coverage = min(citation_count / max(len(enriched_sources), 1), 1.0)
+        
+        # Confidence formula: 40% average quality + 30% citation density + 30% source coverage
+        confidence_score = (avg_quality * 0.4) + (min(citation_count / 10, 1.0) * 0.3) + (source_coverage * 0.3)
+        confidence_percent = round(confidence_score * 100, 1)
+        
+        # Determine confidence level
+        if confidence_percent >= 80:
+            confidence_level = "High"
+        elif confidence_percent >= 60:
+            confidence_level = "Medium"
+        else:
+            confidence_level = "Low"
+        
+        # Build response
+        response_data = {
             "answer": answer, 
             "sources": enriched_sources,
             "query": query,
-            "num_sources": len(enriched_sources)
-        })
+            "num_sources": len(enriched_sources),
+            "confidence": {
+                "score": confidence_percent,
+                "level": confidence_level,
+                "citation_count": citation_count,
+                "avg_source_quality": round(avg_quality * 100, 1)
+            }
+        }
+        
+        # Add transcription if audio mode was used
+        if search_mode == "audio" and 'transcription_text' in locals():
+            response_data["transcription"] = transcription_text
+        
+        return JSONResponse(response_data)
     except Exception as e:
         print(f"Error in query endpoint: {e}")
         import traceback
@@ -704,7 +764,7 @@ async def view_source(file_path: str):
         
         # Decode URL encoding (handles %20 for spaces, etc.)
         decoded_path = unquote(file_path)
-        print(f"\n🔍 View source request:")
+        print(f"\n[SEARCH] View source request:")
         print(f"   Original: {file_path}")
         print(f"   Decoded: {decoded_path}")
         
@@ -722,7 +782,7 @@ async def view_source(file_path: str):
         # If path doesn't include 'uploads', try adding it
         if 'uploads' not in normalized_path.lower():
             filename = os.path.basename(normalized_path)
-            paths_to_try.append(os.path.join("uploads", filename))
+            paths_to_try.append(os.path.join("data/uploads", filename))
         
         # Try each path
         full_path = None
@@ -730,14 +790,14 @@ async def view_source(file_path: str):
             print(f"   Trying: {attempt_path}")
             if os.path.exists(attempt_path):
                 full_path = attempt_path
-                print(f"   ✅ Found!")
+                print(f"   [OK] Found!")
                 break
         
         if full_path is None:
-            print(f"   ❌ File not found in any location")
+            print(f"   [ERROR] File not found in any location")
             
             # List similar files in uploads for debugging
-            uploads_dir = "uploads"
+            uploads_dir = "data/uploads"
             if os.path.exists(uploads_dir):
                 all_files = os.listdir(uploads_dir)
                 # Find files with similar names
@@ -755,7 +815,7 @@ async def view_source(file_path: str):
         return FileResponse(full_path)
         
     except Exception as e:
-        print(f"   ❌ Error serving file: {e}")
+        print(f"   [ERROR] Error serving file: {e}")
         import traceback
         traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -825,6 +885,116 @@ async def list_indexed_files():
         traceback.print_exc()
         return JSONResponse({"error": str(e), "files": []}, status_code=200)
 
+@app.get("/source_metadata/{file_path:path}")
+async def get_source_metadata(file_path: str):
+    """Get detailed metadata for a source file"""
+    try:
+        from urllib.parse import unquote
+        import datetime
+        from PIL import Image
+        
+        decoded_path = unquote(file_path)
+        normalized_path = decoded_path.replace('\\', os.sep).replace('/', os.sep)
+        
+        # Try to find the file
+        full_path = None
+        if os.path.exists(normalized_path):
+            full_path = normalized_path
+        elif os.path.exists(os.path.abspath(normalized_path)):
+            full_path = os.path.abspath(normalized_path)
+        
+        if not full_path or not os.path.exists(full_path):
+            return JSONResponse({"error": "File not found"}, status_code=404)
+        
+        # Get basic file stats
+        stats = os.stat(full_path)
+        file_size = stats.st_size
+        modified_time = datetime.datetime.fromtimestamp(stats.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        created_time = datetime.datetime.fromtimestamp(stats.st_ctime).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Determine file type
+        extension = os.path.splitext(full_path)[1].lower()
+        
+        metadata = {
+            "file_name": os.path.basename(full_path),
+            "file_path": full_path,
+            "file_size": file_size,
+            "file_size_formatted": f"{file_size / 1024:.2f} KB" if file_size < 1024*1024 else f"{file_size / (1024*1024):.2f} MB",
+            "modified_date": modified_time,
+            "created_date": created_time,
+            "extension": extension
+        }
+        
+        # Type-specific metadata
+        if extension in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+            try:
+                img = Image.open(full_path)
+                metadata["type"] = "image"
+                metadata["dimensions"] = f"{img.width} x {img.height}"
+                metadata["width"] = img.width
+                metadata["height"] = img.height
+                metadata["format"] = img.format
+                metadata["mode"] = img.mode
+                
+                # Try to get EXIF data
+                exif_data = img._getexif() if hasattr(img, '_getexif') else None
+                if exif_data:
+                    metadata["exif"] = {str(k): str(v) for k, v in exif_data.items() if k and v}
+            except Exception as e:
+                metadata["error"] = f"Could not read image metadata: {str(e)}"
+        
+        elif extension in ['.mp3', '.wav', '.m4a', '.flac', '.ogg']:
+            metadata["type"] = "audio"
+            # Try to get audio duration if possible
+            try:
+                import wave
+                if extension == '.wav':
+                    with wave.open(full_path, 'r') as audio:
+                        frames = audio.getnframes()
+                        rate = audio.getframerate()
+                        duration = frames / float(rate)
+                        metadata["duration"] = f"{duration:.2f} seconds"
+                        metadata["sample_rate"] = rate
+                        metadata["channels"] = audio.getnchannels()
+            except:
+                pass
+        
+        elif extension in ['.pdf', '.txt', '.docx', '.doc']:
+            metadata["type"] = "document"
+            if extension == '.txt':
+                try:
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        metadata["word_count"] = len(content.split())
+                        metadata["char_count"] = len(content)
+                        metadata["line_count"] = len(content.split('\n'))
+                except:
+                    pass
+        
+        # Get chunks from ChromaDB for this file
+        try:
+            all_data = indexer.collection.get()
+            metadatas = all_data.get("metadatas", [])
+            source_name = os.path.basename(full_path)
+            
+            chunks_for_file = [m for m in metadatas if m.get("source") == source_name]
+            metadata["chunk_count"] = len(chunks_for_file)
+            
+            # Get OCR confidence if available
+            ocr_confidences = [m.get("ocr_confidence") for m in chunks_for_file if m.get("ocr_confidence")]
+            if ocr_confidences:
+                metadata["avg_ocr_confidence"] = f"{sum(ocr_confidences) / len(ocr_confidences):.1f}%"
+        except:
+            pass
+        
+        return JSONResponse(metadata)
+        
+    except Exception as e:
+        print(f"Error in source_metadata endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.post("/query_by_image/")
 async def query_by_image(image: UploadFile = File(...), top_k: int = Form(TOP_K_DEFAULT)):
     """Search using an image (image-to-text/image cross-modal search)"""
@@ -832,8 +1002,8 @@ async def query_by_image(image: UploadFile = File(...), top_k: int = Form(TOP_K_
         print(f"Image query received: {image.filename}")
         
         # Save image temporarily
-        temp_path = os.path.join("uploads", f"temp_query_{uuid.uuid4().hex}_{image.filename}")
-        os.makedirs("uploads", exist_ok=True)
+        temp_path = os.path.join("data/uploads", f"temp_query_{uuid.uuid4().hex}_{image.filename}")
+        os.makedirs("data/uploads", exist_ok=True)
         with open(temp_path, "wb") as out:
             content = await image.read()
             out.write(content)
@@ -862,12 +1032,12 @@ async def query_by_image(image: UploadFile = File(...), top_k: int = Form(TOP_K_
         prompt = build_prompt(query_text, retrieved_docs, metadatas, top_k)
         
         # Generate answer - increased max_tokens to 2048 for complete, well-formatted answers with ALL sections
-        raw_answer = generate_answer(prompt, model_path=LLAMA_MODEL_PATH, max_tokens=2048, temperature=0.7, device=EMBED_DEVICE)
+        raw_answer = generate_answer(prompt, model_path=LLAMA_MODEL_PATH, max_tokens=800, temperature=0.3, device=EMBED_DEVICE)
         
         # POST-PROCESS: Force proper formatting (ChatGPT-style structure)
         formatted_sources = [{"source": m.get("source", "Unknown"), "type": m.get("type", "document")} for m in metadatas]
         answer = format_with_sources(raw_answer, formatted_sources)
-        print(f"✅ Image query formatted answer length: {len(answer)} characters")
+        print(f"[OK] Image query formatted answer length: {len(answer)} characters")
         
         # Enrich metadata
         enriched_sources = []

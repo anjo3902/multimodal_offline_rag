@@ -20,7 +20,7 @@ STRUCTURE:
 4. ## Insights (short paragraphs)
 5. ## Takeaway (one sentence)
 
-Do NOT mention sources.<|end|>
+Since no sources are available, provide a general answer.<|end|>
 <|user|>
 {question}<|end|>
 <|assistant|>
@@ -92,43 +92,31 @@ STRUCTURE:
 4. ## Insights (short paragraphs)
 5. ## Takeaway (one sentence)
 
-Do NOT mention sources.
+CRITICAL CITATION REQUIREMENTS:
+- Add numbered citations [1], [2], [3] after EVERY factual claim
+- Use [1] for information from Source 1, [2] for Source 2, etc.
+- Multiple sources? Use [1][2] together
+- Citations MUST appear inline within sentences
+- Each paragraph must have at least one citation
 
-EXAMPLE:
+CITATION EXAMPLES:
+- "Job seekers face increased competition [1]."
+- "AI tools help automate tasks [2][3]."
+- "The market shifted in 2024 [1]."
 
-## Summary
-
-This recipe creates a **flavorful one-pan dish** with **chicken** and **potatoes**. Simple with minimal cleanup.
-
-## Key Points
-
-- **Main ingredients**: olive oil, lemon juice, garlic, paprika, 7-spice blend
-- **Method**: coat ingredients, bake together
-- **Temperature**: 400F for one hour
-- **Result**: tender chicken, crispy potatoes
-
-## Steps
-
-1. **Mix marinade** with olive oil, lemon juice, garlic, spices
-2. **Coat thoroughly** chicken and potatoes with mixture
-3. **Bake** at 400F for 60 minutes until golden
-
-## Insights
-
-The **paprika** and **7-spice blend** enhance flavor. Hand-mixing ensures even coating.
-
-High temperature creates **crispy exterior** while locking in juices. Potatoes absorb marinade.
-
-## Takeaway
-
-Restaurant-quality flavor with minimal effort - perfect for weeknight dinners!<|end|>
+REMEMBER:
+- Answer ONLY based on the provided Context sources
+- Do NOT make up information not in the sources
+- Every fact needs a citation [1], [2], etc.
+- If sources don't have the answer, say so clearly<|end|>
 <|user|>
 Context:
 {context}{ocr_emphasis}
 
 Question: {question}
 
-Follow structure: Summary -> Key Points -> Steps -> Insights -> Takeaway. Bullets under 20 words. Bold key terms. No sources.<|end|>
+IMPORTANT: Follow structure: Summary -> Key Points -> Steps -> Insights -> Takeaway. 
+Add [1], [2], [3] citations after EVERY fact. Use [Source X] number. Bullets under 20 words. Bold key terms.<|end|>
 <|assistant|>
 ## Summary
 

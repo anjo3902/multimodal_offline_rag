@@ -4,7 +4,7 @@ from PIL import Image
 import numpy as np
 from typing import List, Union
 
-TEXT_MODEL = "all-MiniLM-L6-v2"
+TEXT_MODEL = "BAAI/bge-small-en"
 IMAGE_MODEL = "clip-ViT-B-32"
 
 class Embedder:

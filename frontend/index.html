@@ -347,12 +347,34 @@
       
       <!-- Audio Query -->
       <div id="audioQuerySection" style="display:none; border-top: 2px dashed #ddd; padding-top: 20px;">
-        <label style="font-weight:600; color:#34495e; display:block; margin-bottom:8px;">🎵 Upload Query Audio</label>
-        <p style="color:#7f8c8d; font-size:0.85em; margin-bottom:10px;">
-          Upload an audio file - it will be transcribed and used to search for similar content
-        </p>
-        <input id="queryAudio" type="file" accept=".mp3,.wav,.m4a,.flac" style="border-style:solid;" />
-        <button onclick="askByAudio()" id="askAudioBtn" style="margin-top:10px;">🔍 Search by Audio</button>
+        <!-- Voice Recording Option -->
+        <div style="border: 2px solid #e8f4f8; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #f0f8ff;">
+          <label style="font-weight:600; color:#2980b9; display:block; margin-bottom:8px;">� Voice Recording Option</label>
+          <p style="color:#7f8c8d; font-size:0.85em; margin-bottom:10px;">
+            Record your voice directly - faster than uploading! (Uses browser's speech recognition)
+          </p>
+          <button onclick="toggleVoiceRecording()" id="voiceRecordBtn" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); margin-bottom: 10px;">
+            🎤 Start Voice Recording
+          </button>
+          <span id="voiceStatus" style="margin-left: 10px; font-weight: 600; color: #7f8c8d;">Status: Ready</span>
+          <div id="voiceTranscriptDisplay" style="margin-top:10px; padding:10px; background:#fff; border:1px solid #ddd; border-radius:5px; min-height:40px; display:none;">
+            <strong>Transcribed Text:</strong>
+            <div id="voiceTranscriptText" style="margin-top:5px; color:#2c3e50;"></div>
+          </div>
+        </div>
+        
+        <div style="text-align:center; color:#95a5a6; font-weight:600; margin:15px 0;">OR</div>
+        
+        <!-- File Upload Option -->
+        <div style="border: 2px solid #f0e8f4; border-radius: 8px; padding: 15px; background: #faf5ff;">
+          <label style="font-weight:600; color:#8e44ad; display:block; margin-bottom:8px;">📁 Upload Audio File</label>
+          <p style="color:#7f8c8d; font-size:0.85em; margin-bottom:10px;">
+            Upload an audio file - it will be transcribed on server and used to search for similar content
+          </p>
+          <input id="queryAudio" type="file" accept=".mp3,.wav,.m4a,.flac" style="border-style:solid;" />
+        </div>
+        
+        <button onclick="askByAudio()" id="askAudioBtn" style="margin-top:15px; width:100%;">🔍 Search by Audio</button>
       </div>
       
       <div id="resultsContainer" style="display:none;">
@@ -653,8 +675,34 @@ ${detail.extracted_text}
 
     function displayResults(data) {
       // Convert markdown answer to HTML for better rendering
-      const formattedAnswer = markdownToHTML(data.answer || "No answer generated");
-      document.getElementById('answer').innerHTML = formattedAnswer;
+      let formattedAnswer = markdownToHTML(data.answer || "No answer generated");
+      
+      // Make citations clickable - link [1], [2], [3] to source cards
+      formattedAnswer = formattedAnswer.replace(/\[(\d+)\]/g, (match, num) => {
+        return `<span class="citation-link" onclick="scrollToSource(${num})" title="Click to view source ${num}">${match}</span>`;
+      });
+      
+      // Add confidence score banner if available
+      let confidenceBanner = '';
+      if (data.confidence) {
+        const conf = data.confidence;
+        let confColor = conf.score >= 80 ? '#27ae60' : conf.score >= 60 ? '#f39c12' : '#e74c3c';
+        let confIcon = conf.score >= 80 ? '✅' : conf.score >= 60 ? '⚠️' : '❌';
+        
+        confidenceBanner = `
+          <div style="background: ${confColor}; color: white; padding: 12px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 24px;">${confIcon}</span>
+            <div style="flex: 1;">
+              <strong>Answer Confidence: ${conf.level} (${conf.score}%)</strong>
+              <div style="font-size: 0.85em; opacity: 0.9; margin-top: 3px;">
+                ${conf.citation_count} citations • ${conf.avg_source_quality}% avg source quality
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      document.getElementById('answer').innerHTML = confidenceBanner + formattedAnswer;
       displaySources(data.sources);
     }
 
@@ -697,7 +745,7 @@ ${detail.extracted_text}
             }
             
             return `
-              <div class="source-card">
+              <div class="source-card" id="source-${src.citation_number}">
                 <div class="source-header">
                   <span class="citation-badge">[${src.citation_number}]</span>
                   <span class="file-icon">${icon}</span>
@@ -709,7 +757,10 @@ ${detail.extracted_text}
                   <div class="meta-item">📋 Type: ${src.file_type}</div>
                   ${metaInfo}
                 </div>
-                ${src.file_path ? `<a href="/view_source/${encodeURIComponent(src.file_path)}" target="_blank" class="view-source-btn">👁️ View Source File</a>` : ''}
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                  ${src.file_path ? `<a href="/view_source/${encodeURIComponent(src.file_path)}" target="_blank" class="view-source-btn" style="flex:1;">👁️ View Source File</a>` : ''}
+                  ${src.file_path ? `<button onclick="showMetadata('${encodeURIComponent(src.file_path)}')" style="flex:1; font-size:13px; padding:8px;">📊 View Metadata</button>` : ''}
+                </div>
               </div>
             `;
           }).join('')
@@ -750,27 +801,59 @@ ${detail.extracted_text}
     async function askByAudio(){
       const inp = document.getElementById('queryAudio');
       const file = inp.files[0];
-      if(!file){ 
-        alert("Please select an audio file to query"); 
-        return; 
+      
+      // Check if we have recorded audio blob OR file upload
+      if (!file && !recordedAudioBlob) {
+        alert("Please either:\n• Upload an audio file, OR\n• Record your voice using the voice recording button");
+        return;
       }
       
       const btn = document.getElementById('askAudioBtn');
       btn.disabled = true;
-      btn.textContent = '⏳ Transcribing Audio...';
       
       document.getElementById('resultsContainer').style.display = 'block';
-      document.getElementById('answer').innerHTML = '<div class="loading"><div class="spinner"></div>Transcribing audio and generating answer...</div>';
+      document.getElementById('answer').innerHTML = '<div class="loading"><div class="spinner"></div>Processing your query and generating answer...</div>';
       document.getElementById('sources').innerHTML = '<div class="loading">Loading sources...</div>';
       
       try {
         const fd = new FormData();
-        fd.append('search_mode', 'audio');
-        fd.append('query_audio', file);
+        
+        // PRIORITY: If file is uploaded, ALWAYS use file (even if recording exists)
+        if (file) {
+          // Use uploaded file - needs server transcription
+          btn.textContent = '⏳ Transcribing uploaded audio...';
+          fd.append('query_audio', file);
+          fd.append('search_mode', 'audio');
+          
+          console.log('[Audio] Using uploaded file:', file.name, file.size, 'bytes');
+          
+        } else if (recordedAudioBlob && currentTranscription.trim()) {
+          // ✅ FIX: Use transcribed TEXT instead of audio blob (avoids 500 error!)
+          btn.textContent = '⏳ Searching with your voice query...';
+          fd.append('query', currentTranscription.trim());
+          fd.append('search_mode', 'text');
+          
+          console.log('[Audio] Using transcribed text from voice recording:', currentTranscription.trim());
+          
+        } else if (recordedAudioBlob) {
+          // Fallback: transcription didn't work, send audio blob
+          btn.textContent = '⏳ Transcribing your voice recording...';
+          
+          const audioFile = new File([recordedAudioBlob], 'voice_recording.webm', { 
+            type: recordedAudioBlob.type 
+          });
+          
+          fd.append('query_audio', audioFile);
+          fd.append('search_mode', 'audio');
+          
+          console.log('[Audio] Using recorded audio blob (fallback):', audioFile.size, 'bytes');
+        }
         
         const res = await fetch('/query/', {method:'POST', body: fd});
         
         if (!res.ok) {
+          const errorText = await res.text();
+          console.error('[Audio] Server error response:', errorText);
           throw new Error(`Server returned ${res.status}: ${res.statusText}`);
         }
         
@@ -780,8 +863,40 @@ ${detail.extracted_text}
           throw new Error('No data received from server');
         }
         
+        // Keep transcription display if we used voice recording
+        if (currentTranscription.trim()) {
+          // Transcription was already shown immediately after recording - keep it visible
+          console.log('[Voice] Search completed using pre-transcribed text');
+          // Don't update voiceTranscriptText - keep the IMMEDIATE transcription visible
+          
+          // Clear the variables after successful submission
+          recordedAudioBlob = null;
+          currentTranscription = '';
+          
+        } else if (data.transcription) {
+          // Server transcribed audio file upload
+          console.log('[Voice] Transcription received from server:', data.transcription);
+          
+          document.getElementById('voiceTranscriptDisplay').style.display = 'block';
+          document.getElementById('voiceTranscriptText').innerHTML = `
+            <div style="padding: 10px; background: #e8f5e9; border-radius: 5px; border-left: 4px solid #27ae60;">
+              <strong style="color:#27ae60;">✓ Transcribed Text:</strong><br>
+              <div style="margin-top: 8px; padding: 10px; background: white; border-radius: 3px;">
+                <strong style="font-size: 16px; color: #2c3e50;">"${data.transcription}"</strong>
+              </div>
+              <div style="margin-top: 10px; padding: 8px; background: #d4edda; border-left: 3px solid #28a745; border-radius: 3px;">
+                <small style="color:#155724;">
+                  <strong>✓ Success!</strong> Your audio was transcribed and searched successfully.
+                </small>
+              </div>
+            </div>
+          `;
+        }
+        
         displayResults(data);
-        inp.value = ''; // Clear file input
+        
+        // Clear file input
+        inp.value = '';
         
       } catch(e) {
         console.error("Error during audio query:", e);
@@ -892,6 +1007,488 @@ ${detail.extracted_text}
         ask();
       }
     });
+    
+    // ============================================
+    // VOICE RECORDING FUNCTIONALITY (Web Speech API)
+    // Shows transcript immediately like VoiceStreamAI
+    // Then submits as TEXT query (fast, no server transcription needed)
+    // ============================================
+    // VOICE RECORDING - MediaRecorder (like VoiceStreamAI)
+    // Records actual audio and sends to Faster-Whisper backend
+    // ============================================
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let recordedAudioBlob = null;
+    let recordingStream = null;
+    let recognition = null;  // Speech recognition for live transcription
+    let currentTranscription = '';  // Store transcribed text
+    
+    function toggleVoiceRecording() {
+      if (isRecording) {
+        stopVoiceRecording();
+      } else {
+        startVoiceRecording();
+      }
+    }
+    
+    async function startVoiceRecording() {
+      console.log('[Voice] Starting voice recording with MediaRecorder...');
+      
+      try {
+        // Request microphone access
+        console.log('[Voice] Requesting microphone permission...');
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: false
+          } 
+        });
+        
+        console.log('[Voice] ✓ Microphone permission granted!');
+        recordingStream = stream;
+        
+        // Reset previous recording
+        audioChunks = [];
+        recordedAudioBlob = null;
+        
+        // Create MediaRecorder
+        // Try different formats for browser compatibility
+        let options = { mimeType: 'audio/webm' };
+        if (!MediaRecorder.isTypeSupported('audio/webm')) {
+          console.warn('[Voice] audio/webm not supported, trying audio/mp4');
+          options = { mimeType: 'audio/mp4' };
+        }
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          console.warn('[Voice] audio/mp4 not supported, using default');
+          options = {};
+        }
+        
+        mediaRecorder = new MediaRecorder(stream, options);
+        console.log('[Voice] MediaRecorder created with mimeType:', mediaRecorder.mimeType);
+        
+        // Handle data as it comes in
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+            console.log('[Voice] Audio chunk received:', event.data.size, 'bytes');
+          }
+        };
+        
+        // Handle recording stop
+        mediaRecorder.onstop = () => {
+          console.log('[Voice] Recording stopped, processing audio...');
+          
+          // Stop speech recognition
+          if (recognition) {
+            try {
+              recognition.stop();
+              console.log('[Voice] Speech recognition stopped');
+            } catch (e) {
+              console.warn('[Voice] Error stopping recognition:', e);
+            }
+          }
+          
+          // Create blob from chunks
+          recordedAudioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+          console.log('[Voice] ✓ Audio blob created:', recordedAudioBlob.size, 'bytes');
+          
+          // Stop all audio tracks
+          if (recordingStream) {
+            recordingStream.getTracks().forEach(track => {
+              track.stop();
+              console.log('[Voice] Audio track stopped');
+            });
+            recordingStream = null;
+          }
+          
+          // Show final transcription IMMEDIATELY (THIS IS WHAT USER WANTED!)
+          const finalText = currentTranscription.trim();
+          
+          if (finalText) {
+            // ✅ TRANSCRIPTION SHOWN IMMEDIATELY!
+            document.getElementById('voiceStatus').innerHTML = '<span style="color:#27ae60;">✓ Recording & Transcription Complete!</span>';
+            
+            document.getElementById('voiceTranscriptDisplay').style.display = 'block';
+            document.getElementById('voiceTranscriptText').innerHTML = `
+              <div style="padding: 10px; background: #e8f5e9; border-radius: 5px; border-left: 4px solid #27ae60;">
+                <strong style="color:#27ae60;">✓ Transcribed Text:</strong><br>
+                <div style="margin-top: 8px; font-size: 16px; line-height: 1.5; padding: 10px; background: white; border-radius: 5px; color: #2c3e50;">
+                  <strong>"${finalText}"</strong>
+                </div>
+                <div style="margin-top: 10px; font-size: 13px; color: #666;">
+                  <div style="display: flex; gap: 15px; margin-top: 8px;">
+                    <span>📊 Size: ${(recordedAudioBlob.size / 1024).toFixed(2)} KB</span>
+                    <span>📝 ${finalText.split(' ').length} words</span>
+                  </div>
+                </div>
+                <div style="margin-top: 12px; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 3px;">
+                  <small style="color:#856404;">
+                    <strong>💡 Next:</strong> Click <strong>"Search by Audio"</strong> button below to search!
+                  </small>
+                </div>
+              </div>
+            `;
+            
+            console.log('[Voice] ✓ Transcription shown immediately:', finalText);
+          } else {
+            // No transcription captured (speech recognition didn't work)
+            document.getElementById('voiceStatus').innerHTML = '<span style="color:#f39c12;">⚠️ Recording saved (transcription unavailable)</span>';
+            
+            document.getElementById('voiceTranscriptDisplay').style.display = 'block';
+            document.getElementById('voiceTranscriptText').innerHTML = `
+              <div style="padding: 10px; background: #fff3cd; border-radius: 5px; border-left: 4px solid #f39c12;">
+                <strong style="color:#856404;">⚠️ Recording Complete</strong><br>
+                <div style="margin-top: 8px;">
+                  <p>📊 Size: ${(recordedAudioBlob.size / 1024).toFixed(2)} KB</p>
+                  <p style="color:#666; font-size: 14px;">
+                    Real-time transcription was unavailable.<br>
+                    Audio will be transcribed when you click "Search by Audio".
+                  </p>
+                </div>
+                <div style="margin-top: 10px; padding: 8px; background: #e3f2fd; border-left: 3px solid #2196f3; border-radius: 3px;">
+                  <small style="color:#0d47a1;">
+                    <strong>💡 Next:</strong> Click <strong>"Search by Audio"</strong> button below!
+                  </small>
+                </div>
+              </div>
+            `;
+          }
+        };
+        
+        // Initialize speech recognition for real-time transcription
+        currentTranscription = '';
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+          
+          recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcript = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                finalTranscript += transcript + ' ';
+              } else {
+                interimTranscript += transcript;
+              }
+            }
+            
+            if (finalTranscript) {
+              currentTranscription += finalTranscript;
+            }
+            
+            // Show real-time transcription
+            const displayText = currentTranscription + interimTranscript;
+            if (displayText.trim()) {
+              document.getElementById('voiceTranscriptText').innerHTML = `
+                <div style="padding: 10px; background: #e3f2fd; border-radius: 5px;">
+                  <strong style="color:#1976d2;">🎤 Recording... (Real-time transcription)</strong><br>
+                  <div style="margin-top: 8px; font-size: 15px; line-height: 1.5; color: #333;">
+                    "${displayText}"
+                  </div>
+                  <small style="color:#666;">Keep speaking... Click "Stop Recording" when done.</small>
+                </div>
+              `;
+            }
+          };
+          
+          recognition.onerror = (event) => {
+            console.warn('[Voice] Speech recognition error:', event.error);
+            // Don't show error to user - MediaRecorder will still work
+          };
+          
+          try {
+            recognition.start();
+            console.log('[Voice] ✓ Speech recognition started for real-time transcription');
+          } catch (e) {
+            console.warn('[Voice] Could not start speech recognition:', e);
+            // Continue anyway - MediaRecorder still works
+          }
+        }
+        
+        // Start recording
+        mediaRecorder.start();
+        isRecording = true;
+        console.log('[Voice] ✓ Recording started!');
+        
+        // Update UI to recording state
+        document.getElementById('voiceRecordBtn').style.background = 'linear-gradient(135deg, #27ae60 0%, #229954 100%)';
+        document.getElementById('voiceRecordBtn').innerHTML = '⏹️ Stop Recording';
+        document.getElementById('voiceStatus').innerHTML = '<span style="color:#27ae60;">🎤 Recording... Speak now!</span>';
+        
+        document.getElementById('voiceTranscriptDisplay').style.display = 'block';
+        document.getElementById('voiceTranscriptText').innerHTML = `
+          <div style="padding: 10px; background: #ffebee; border-radius: 5px; animation: pulse 1.5s ease-in-out infinite;">
+            <strong style="color:#e74c3c;">🔴 Recording in progress...</strong><br>
+            <div style="margin-top: 8px; color:#666;">
+              Speak your question clearly.<br>
+              Click "Stop Recording" when done.
+            </div>
+          </div>
+          <style>
+            @keyframes pulse {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.7; }
+            }
+          </style>
+        `;
+        
+      } catch (error) {
+        console.error('[Voice] Error accessing microphone:', error);
+        
+        let errorMsg = '';
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          errorMsg = '❌ Microphone permission denied. Please allow microphone access in your browser.';
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+          errorMsg = '❌ No microphone found. Please connect a microphone and try again.';
+        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+          errorMsg = '❌ Microphone is already in use by another application.';
+        } else {
+          errorMsg = `❌ Error: ${error.message}`;
+        }
+        
+        document.getElementById('voiceStatus').innerHTML = `<span style="color:#e74c3c;">${errorMsg}</span>`;
+        document.getElementById('voiceTranscriptDisplay').style.display = 'block';
+        document.getElementById('voiceTranscriptText').innerHTML = `
+          <div style="padding: 10px; background: #ffebee; border-radius: 5px; border-left: 3px solid #e74c3c;">
+            <strong style="color:#c62828;">❌ Cannot Access Microphone</strong><br>
+            <div style="margin-top: 8px; color:#c62828;">
+              <p><strong>Error:</strong> ${errorMsg}</p>
+              <p style="margin-top: 10px;"><strong>Solutions:</strong></p>
+              <ul style="margin: 5px 0 5px 20px; font-size: 14px;">
+                <li>Click the <strong>microphone icon (🎤)</strong> in your browser's address bar</li>
+                <li>Select <strong>"Always allow"</strong> for this site</li>
+                <li>Refresh the page (F5) and try again</li>
+                <li>Check microphone is connected and working</li>
+                <li>Close other apps that might be using the microphone</li>
+              </ul>
+            </div>
+          </div>
+        `;
+        
+        isRecording = false;
+        resetVoiceUI();
+      }
+    }
+    
+    function stopVoiceRecording() {
+      console.log('[Voice] Stopping recording...');
+      
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        console.log('[Voice] MediaRecorder.stop() called');
+      }
+      
+      // Stop speech recognition
+      if (recognition) {
+        try {
+          recognition.stop();
+          console.log('[Voice] Speech recognition stopped');
+        } catch (e) {
+          console.warn('[Voice] Error stopping recognition:', e);
+        }
+      }
+      
+      isRecording = false;
+      
+      // UI will be updated in mediaRecorder.onstop
+      resetVoiceUI();
+    }
+    
+    function resetVoiceUI() {
+      document.getElementById('voiceRecordBtn').style.background = 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)';
+      document.getElementById('voiceRecordBtn').innerHTML = '🎤 Start Voice Recording';
+      if (!recordedAudioBlob) {
+        document.getElementById('voiceStatus').innerHTML = '<span style="color:#7f8c8d;">Status: Ready</span>';
+      }
+    }
+    
+    // ============================================
+    // FILE UPLOAD LISTENER - Clear voice recording when file selected
+    // ============================================
+    document.getElementById('queryAudio').addEventListener('change', function(e) {
+      if (e.target.files.length > 0) {
+        const fileName = e.target.files[0].name;
+        const fileSize = (e.target.files[0].size / 1024).toFixed(2);
+        
+        // Clear voice recording since user chose to upload file instead
+        recordedAudioBlob = null;
+        
+        // Hide voice transcript display and show file info
+        document.getElementById('voiceTranscriptDisplay').style.display = 'block';
+        document.getElementById('voiceTranscriptText').innerHTML = `
+          <div style="padding: 10px; background: #e8f5e9; border-radius: 5px;">
+            <strong style="color:#27ae60;">✓ Audio File Selected:</strong><br>
+            <div style="margin-top: 8px;">
+              📁 <strong>${fileName}</strong><br>
+              <small>Size: ${fileSize} KB</small><br>
+              <small style="color:#7f8c8d;">Click "Search by Audio" to transcribe and search</small>
+            </div>
+          </div>
+        `;
+        
+        // Update status
+        document.getElementById('voiceStatus').innerHTML = '<span style="color:#27ae60;">✓ File ready for upload</span>';
+        
+        console.log('File selected:', fileName, fileSize, 'KB');
+      } else {
+        // File was deselected
+        document.getElementById('voiceTranscriptDisplay').style.display = 'none';
+        document.getElementById('voiceStatus').textContent = 'Status: Ready';
+        document.getElementById('voiceStatus').style.color = '#7f8c8d';
+      }
+    });
+    
+    // ============================================
+    // CITATION NAVIGATION
+    // ============================================
+    function scrollToSource(citationNumber) {
+      const sourceCard = document.getElementById(`source-${citationNumber}`);
+      if (sourceCard) {
+        sourceCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        sourceCard.style.animation = 'highlight-pulse 1.5s';
+        setTimeout(() => {
+          sourceCard.style.animation = '';
+        }, 1500);
+      }
+    }
+    
+    // ============================================
+    // METADATA VIEWER
+    // ============================================
+    async function showMetadata(encodedPath) {
+      try {
+        const res = await fetch(`/source_metadata/${encodedPath}`);
+        const metadata = await res.json();
+        
+        if (metadata.error) {
+          alert('Error loading metadata: ' + metadata.error);
+          return;
+        }
+        
+        let metadataHtml = `
+          <div style="background: white; padding: 20px; border-radius: 10px; max-width: 600px; margin: 20px auto; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #2c3e50;">📊 File Metadata</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 8px; font-weight: 600; color: #7f8c8d;">File Name:</td>
+                <td style="padding: 8px;">${metadata.file_name}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 8px; font-weight: 600; color: #7f8c8d;">File Size:</td>
+                <td style="padding: 8px;">${metadata.file_size_formatted}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 8px; font-weight: 600; color: #7f8c8d;">Type:</td>
+                <td style="padding: 8px;">${metadata.type || 'unknown'} (${metadata.extension})</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 8px; font-weight: 600; color: #7f8c8d;">Modified:</td>
+                <td style="padding: 8px;">${metadata.modified_date}</td>
+              </tr>
+        `;
+        
+        if (metadata.dimensions) {
+          metadataHtml += `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 8px; font-weight: 600; color: #7f8c8d;">Dimensions:</td>
+              <td style="padding: 8px;">${metadata.dimensions}</td>
+            </tr>
+          `;
+        }
+        
+        if (metadata.duration) {
+          metadataHtml += `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 8px; font-weight: 600; color: #7f8c8d;">Duration:</td>
+              <td style="padding: 8px;">${metadata.duration}</td>
+            </tr>
+          `;
+        }
+        
+        if (metadata.chunk_count) {
+          metadataHtml += `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 8px; font-weight: 600; color: #7f8c8d;">Indexed Chunks:</td>
+              <td style="padding: 8px;">${metadata.chunk_count}</td>
+            </tr>
+          `;
+        }
+        
+        if (metadata.avg_ocr_confidence) {
+          metadataHtml += `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 8px; font-weight: 600; color: #7f8c8d;">OCR Confidence:</td>
+              <td style="padding: 8px;">${metadata.avg_ocr_confidence}</td>
+            </tr>
+          `;
+        }
+        
+        metadataHtml += `
+            </table>
+            <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 15px; width: 100%;">Close</button>
+          </div>
+        `;
+        
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; overflow-y: auto;';
+        overlay.innerHTML = metadataHtml;
+        overlay.onclick = (e) => {
+          if (e.target === overlay) overlay.remove();
+        };
+        document.body.appendChild(overlay);
+        
+      } catch(e) {
+        console.error('Error fetching metadata:', e);
+        alert('Error loading metadata: ' + e.message);
+      }
+    }
+    
+    // Add CSS for citation links
+    const style = document.createElement('style');
+    style.textContent = `
+      .citation-link {
+        color: #3498db;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        padding: 2px 4px;
+        border-radius: 3px;
+        transition: all 0.2s;
+      }
+      .citation-link:hover {
+        background: #3498db;
+        color: white;
+        text-decoration: none;
+      }
+      @keyframes highlight-pulse {
+        0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        50% { box-shadow: 0 0 25px rgba(52, 152, 219, 0.6); border-color: #3498db; }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Check MediaRecorder support on page load
+    window.addEventListener('DOMContentLoaded', function() {
+      console.log('[Voice] Page loaded, checking MediaRecorder support...');
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('[Voice] MediaRecorder API not supported');
+        document.getElementById('voiceStatus').innerHTML = '<span style="color:#e74c3c;">⚠️ Voice recording not supported in this browser.</span>';
+        document.getElementById('voiceRecordBtn').disabled = true;
+        document.getElementById('voiceRecordBtn').title = 'Voice recording not supported in this browser';
+      } else {
+        console.log('[Voice] ✓ MediaRecorder API is supported!');
+        document.getElementById('voiceStatus').innerHTML = '<span style="color:#27ae60;">✓ Voice recording ready</span>';
+      }
+    });
+    
   </script>
 </body>
 </html>

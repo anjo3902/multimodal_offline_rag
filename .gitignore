@@ -48,6 +48,7 @@ env/
 .env
 .env.local
 .env.*.local
+config/.env
 
 # Operating System
 .DS_Store
@@ -61,7 +62,9 @@ desktop.ini
 
 # Project specific
 chroma_db/
+data/
 uploads/
+logs/
 *.log
 *.sqlite3
 *.db
