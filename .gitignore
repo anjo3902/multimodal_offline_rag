@@ -71,8 +71,8 @@ logs/
 *.sqlite3
 *.db
 
-# Models (large files - download separately)
-models/
+# Model weight files (large files - download separately via Ollama)
+# Note: backend/models/ directory contains Python code and should be tracked
 *.bin
 *.pth
 *.onnx
