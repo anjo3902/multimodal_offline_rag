@@ -6,6 +6,8 @@
 
 A production-ready Multimodal Retrieval-Augmented Generation (RAG) system that can ingest, index, and query diverse data formats (Documents, Images, Audio) using offline Large Language Models.
 
+> 📖 **New to setup?** Check out our detailed [SETUP.md](SETUP.md) guide for step-by-step instructions!
+
 ## ✨ Features
 
 ### Core Capabilities
@@ -38,20 +40,25 @@ A production-ready Multimodal Retrieval-Augmented Generation (RAG) system that c
 - NVIDIA GPU with CUDA support (recommended for speed)
 - 8GB RAM minimum (16GB recommended)
 - 10GB free disk space
+- Git (for cloning the repository)
 
 ### Installation
 
 1. **Clone the repository:**
 ```bash
 git clone https://github.com/anjo3902/multimodal_offline_rag.git
-cd multimodal_rag_free
+cd multimodal_offline_rag
 ```
 
 2. **Create virtual environment:**
 ```bash
 python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
+
+# Windows
+.venv\Scripts\activate
+
+# Linux/Mac
+source .venv/bin/activate
 ```
 
 3. **Install dependencies:**
@@ -62,22 +69,49 @@ pip install -r config/requirements.txt
 4. **Install Ollama and download Mistral 7B:**
 ```bash
 # Download Ollama from https://ollama.ai
+# After installation, download the model:
 ollama pull mistral
 ```
 
 5. **Set up environment variables:**
-Create `.env` file in root directory:
+
+Create `.env` file in the root directory:
 ```env
+# LLM Model
 LLAMA_MODEL_PATH=mistral
+
+# GPU Acceleration (Optional - Windows example)
 CUDNN_PATH=C:\Program Files\NVIDIA\CUDNN\v9.5\bin\12.6
+
+# Embedding Device (cpu or cuda)
+EMBED_DEVICE=cuda
+
+# Whisper Model Size (tiny, base, small, medium, large)
+WHISPER_MODEL=small
+
+# Server Settings
+HOST=127.0.0.1
+PORT=8000
+
+# Database
+CHROMA_PERSIST_DIR=./data/chroma_db
 ```
 
-6. **Start the server:**
+6. **Create required directories:**
+```bash
+# Windows
+mkdir data\chroma_db data\uploads data\logs
+
+# Linux/Mac
+mkdir -p data/{chroma_db,uploads,logs}
+```
+
+7. **Start the server:**
 ```bash
 python run_server.py
 ```
 
-7. **Open browser:**
+8. **Open browser:**
 Navigate to `http://127.0.0.1:8000`
 
 ## 📖 Usage Guide
@@ -152,35 +186,43 @@ However, new opportunities emerge in tech fields [2].
 
 ### Directory Structure
 ```
-multimodal_rag/
+multimodal_offline_rag/
 ├── backend/
+│   ├── __init__.py
 │   ├── api/
+│   │   ├── __init__.py
 │   │   └── app.py              # FastAPI server & routes
 │   ├── core/
+│   │   ├── __init__.py
 │   │   ├── embeddings.py       # BGE text embeddings
 │   │   ├── clip_embeddings.py  # CLIP image embeddings
 │   │   ├── indexer.py          # ChromaDB indexing
 │   │   ├── ingestion.py        # File processing
 │   │   └── ocr_engine.py       # EasyOCR integration
 │   ├── models/
+│   │   ├── __init__.py
 │   │   ├── llama_query.py      # LLM wrapper
 │   │   └── generator.py        # Mistral generation
 │   └── utils/
+│       ├── __init__.py
 │       ├── utils.py            # Prompt building
 │       └── format_answer.py    # Citation formatting
 ├── frontend/
 │   └── index.html              # Web UI
 ├── config/
 │   ├── requirements.txt        # Python dependencies
-│   └── .env                    # Environment variables
+│   └── .env                    # Environment variables (create this)
 ├── scripts/
 │   ├── run_all.ps1            # Full system startup
 │   ├── run_tests.ps1          # Testing automation
 │   └── stop_server.ps1        # Shutdown script
-├── data/                      # Runtime (gitignored)
+├── data/                      # Runtime (auto-created, gitignored)
 │   ├── chroma_db/            # Vector database
 │   ├── uploads/              # Uploaded files
 │   └── logs/                 # Server logs
+├── .venv/                    # Virtual environment (create this)
+├── .gitignore
+├── LICENSE
 ├── run_server.py             # Entry point
 └── README.md                 # This file
 ```

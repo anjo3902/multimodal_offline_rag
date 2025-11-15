@@ -1,22 +1,42 @@
-fastapi
-uvicorn[standard]
-chromadb
-sentence-transformers
-transformers
-torch
-torchvision
-torchaudio
-faster-whisper
-python-docx
-pdfplumber
-numpy
-tqdm
-Pillow
-pytesseract
-faiss-cpu
-llama-cpp-python
-python-multipart
-aiofiles
-python-dotenv
-scipy
-soundfile
+# Core Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+aiofiles>=23.2.1
+
+# Database & Embeddings
+chromadb>=0.4.15
+sentence-transformers>=2.2.2
+
+# Machine Learning Models
+transformers>=4.35.0
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Audio Processing
+faster-whisper>=0.9.0
+soundfile>=0.12.1
+openai-whisper>=20231117
+
+# Document Processing
+python-docx>=1.1.0
+pdfplumber>=0.10.3
+
+# Image Processing & OCR
+Pillow>=10.1.0
+easyocr>=1.7.0
+pytesseract>=0.3.10
+
+# Utilities
+numpy>=1.24.0
+scipy>=1.11.0
+tqdm>=4.66.0
+python-dotenv>=1.0.0
+
+# LLM Integration
+langchain-ollama>=0.1.0
+
+# Optional: GPU Acceleration (uncomment if needed)
+# nvidia-cudnn-cu12>=9.0.0
+

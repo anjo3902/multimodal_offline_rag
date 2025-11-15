@@ -42,8 +42,14 @@ WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", "/path/to/llama.bin")
 TOP_K_DEFAULT = 5
 
+# Get the project root directory (go up from backend/api/ to project root)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+FRONTEND_DIR = PROJECT_ROOT / "frontend"
+
 app = FastAPI(title="Multimodal RAG (Offline)")
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
+# Only mount static files if frontend directory exists
+if FRONTEND_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 # Initialize embedders and OCR
 embedder = Embedder(device=EMBED_DEVICE)  # For text/audio (sentence-transformers)
