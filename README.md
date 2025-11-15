@@ -7,6 +7,7 @@
 A production-ready Multimodal Retrieval-Augmented Generation (RAG) system that can ingest, index, and query diverse data formats (Documents, Images, Audio) using offline Large Language Models.
 
 > 📖 **New to setup?** Check out our detailed [SETUP.md](SETUP.md) guide for step-by-step instructions!
+> 🤖 **About models?** See [MODELS.md](MODELS.md) for model management and why they're not in this repository!
 
 ## ✨ Features
 
