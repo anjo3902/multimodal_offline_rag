@@ -3,8 +3,7 @@ from typing import List, Dict
 
 def build_prompt(question: str, retrieved_docs: List[str], metadatas: List[Dict], top_k: int = 5) -> str:
     if not retrieved_docs:
-        return f"""<|system|>
-You are a professional AI assistant.
+        return f"""[INST] You are a professional AI assistant.
 
 FORMATTING RULES:
 - Use headers (##), bold (**text**), bullets
@@ -20,10 +19,10 @@ STRUCTURE:
 4. ## Insights (short paragraphs)
 5. ## Takeaway (one sentence)
 
-Since no sources are available, provide a general answer.<|end|>
-<|user|>
-{question}<|end|>
-<|assistant|>
+Since no sources are available, provide a general answer.
+
+Question: {question} [/INST]
+
 ## Summary
 
 """
@@ -75,8 +74,7 @@ Since no sources are available, provide a general answer.<|end|>
     if has_ocr_text:
         ocr_emphasis = "\n\nIMPORTANT: Some sources contain TEXT EXTRACTED FROM IMAGES (OCR). Treat them as primary text sources."
     
-    prompt = f"""<|system|>
-You are a professional AI assistant that generates ChatGPT-style answers.
+    prompt = f"""[INST] You are a professional AI assistant that generates ChatGPT-style answers.
 
 FORMATTING RULES:
 - Use headers (##), bold (**text**), bullets
@@ -108,16 +106,16 @@ REMEMBER:
 - Answer ONLY based on the provided Context sources
 - Do NOT make up information not in the sources
 - Every fact needs a citation [1], [2], etc.
-- If sources don't have the answer, say so clearly<|end|>
-<|user|>
+- If sources don't have the answer, say so clearly
+
 Context:
 {context}{ocr_emphasis}
 
 Question: {question}
 
 IMPORTANT: Follow structure: Summary -> Key Points -> Steps -> Insights -> Takeaway. 
-Add [1], [2], [3] citations after EVERY fact. Use [Source X] number. Bullets under 20 words. Bold key terms.<|end|>
-<|assistant|>
+Add [1], [2], [3] citations after EVERY fact. Use [Source X] number. Bullets under 20 words. Bold key terms. [/INST]
+
 ## Summary
 
 """

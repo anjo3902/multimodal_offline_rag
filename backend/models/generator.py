@@ -1,7 +1,7 @@
 # generator.py
 """
 Multi-fallback generator for multimodal RAG.
-Supports Ollama (Phi-3), Transformers models, and seq2seq fallback.
+Supports Ollama (Mistral, Phi-3, LLaMA, etc.), Transformers models, and seq2seq fallback.
 """
 import os
 from typing import Optional
@@ -22,13 +22,23 @@ class MultiFallbackGenerator:
             
             # Check if model path looks like an Ollama model name
             model_name = self.gptq_path
-            if not model_name or "/" in model_name:
+            if not model_name:
+                print("No model name specified")
+                return None
+            
+            # If it contains a path separator, try to convert to Ollama model name
+            if "/" in model_name:
                 # Convert HuggingFace format to Ollama format
-                if "Phi-3" in str(model_name) or "phi3" in str(model_name).lower():
+                model_lower = str(model_name).lower()
+                if "mistral" in model_lower:
+                    model_name = "mistral"
+                elif "phi-3" in model_lower or "phi3" in model_lower:
                     model_name = "phi3"
+                elif "llama" in model_lower:
+                    model_name = "llama2"  # or llama3 depending on version
                 else:
-                    print(f"Model path '{model_name}' doesn't look like an Ollama model")
-                    return None
+                    print(f"Unknown model path '{model_name}', using as-is for Ollama")
+                    # Keep the original name, might be a custom Ollama model
             
             print(f"Loading Ollama model: {model_name}")
             # Store model name for later use
@@ -66,7 +76,7 @@ class MultiFallbackGenerator:
             return None
 
     def _try_load_auto_gptq(self):
-        """Try loading causal LM model (Phi-3, LLaMA, etc.) via Transformers"""
+        """Try loading causal LM model (Mistral, Phi-3, LLaMA, etc.) via Transformers"""
         try:
             print("Attempting to load causal language model via Transformers...")
             from transformers import AutoTokenizer, AutoModelForCausalLM
